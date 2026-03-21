@@ -140,6 +140,17 @@ inspect_failure_threshold: 3       # trigger inspect suggestion after N failures
 
 Expand `~` to actual home path. Fail loudly if `obsidian_vault_path` doesn't exist.
 
+### Finding config.yaml
+
+Before any command can run, the vault path must be resolved. Use this order:
+
+1. **CLAUDE.md in cwd** — look for `obsidian_vault:` field in `CLAUDE.md` of the current working directory → read `{vault}/config.yaml`
+2. **CLAUDE.md walk-up** — if not in cwd, check parent directories up to 3 levels
+3. **Known locations** — try `~/Documents/ObsidianVault/config.yaml`, `~/Obsidian/config.yaml`, `~/Documents/Obsidian/config.yaml`
+4. **Fail loudly** — if still not found, stop and tell the user: "Could not find config.yaml. Add `obsidian_vault: /path/to/vault` to a CLAUDE.md file in your project folder, or run `setup second brain`."
+
+Never silently fall back to a default path.
+
 ---
 
 ## Vault Structure
@@ -207,13 +218,14 @@ Expand `~` to actual home path. Fail loudly if `obsidian_vault_path` doesn't exi
 8. Add `[[projects/Name/Name]]` wikilink to `system.md` projects table
    (this wikilink is the graph edge — essential for Obsidian graph view)
 
-**CLAUDE.md bridge:** After init, offer to create a `CLAUDE.md` in each project folder:
+**CLAUDE.md bridge:** After init, create a `CLAUDE.md` in each project folder (skip if one already exists):
 ```markdown
 # Claude Code Context
 obsidian_vault: {obsidian_vault_path}
 project: {ProjectName}
 Run: `load context` to initialise session memory.
 ```
+This file is how the skill finds the vault when invoked from a project directory.
 
 ---
 
@@ -233,8 +245,9 @@ Run: `load context` to initialise session memory.
    ```
 5. Update `projects/<n>/<n>-spec.md` if env vars, ports, or data models changed
 6. Update `system.md` entry if status or description changed
-7. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
-8. Log to CSV
+7. Check for `CLAUDE.md` in the project folder — create it if missing (same format as init bridge)
+8. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
+9. Log to CSV
 
 ---
 
