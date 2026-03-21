@@ -5,7 +5,7 @@ description: >
   from scratch on known projects. Use this skill whenever the user is working on a project
   that should have memory, asks Claude to remember or update project context, starts a new
   session on an existing project, runs `init`, `sync`, `load context`, or `inspect`,
-  wants to add a new project to the knowledge base, or asks "what do you know about X project".
+  wants to add a new project to the knowledge base, says "add project X", or asks "what do you know about X project".
   Also triggers automatically when a CLAUDE.md file references an Obsidian vault path.
   ALSO triggers on first-time phrases like "setup second brain", "configure vault",
   "where is my obsidian", or any mention of setting up project memory for the first time.
@@ -214,7 +214,7 @@ Run: `load context` to initialise session memory.
 
 ### 2. `sync` — Update a project after changes
 
-**When:** "sync project", "update context for X", "I made changes to X".
+**When:** "sync project", "update context for X", "I made changes to X", "add project X", or when a project folder exists on disk but has no notes in the vault yet.
 
 **Steps:**
 1. Identify project (from cwd, explicit name, or ask)
