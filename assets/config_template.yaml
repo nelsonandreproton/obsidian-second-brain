@@ -1,0 +1,39 @@
+# Obsidian Second Brain — Claude Code Config
+# Copy this file to your vault root as config.yaml and adjust paths.
+
+obsidian_vault_path: ~/Documents/ObsidianVault   # path to your Obsidian vault
+
+projects_folder: projects       # relative to vault root
+templates_folder: templates     # relative to vault root
+patterns_folder: patterns       # relative to vault root
+logs_folder: logs               # relative to vault root
+system_file: system.md          # relative to vault root
+
+# Folders to scan when running `init` or `sync`
+project_sources:
+  - ~/projects
+  - ~/docker
+  # - /opt/services
+
+# Files to read during project scan (priority order, stops after 3 found)
+scan_targets:
+  - README.md
+  - docker-compose.yml
+  - Dockerfile
+  - .env.example
+  - package.json
+  - requirements.txt
+  - pyproject.toml
+  - go.mod
+  - Makefile
+
+# Max lines to read per file during scan (keeps context lean)
+scan_max_lines: 80
+
+# Projects to always skip during init scan
+scan_ignore:
+  - node_modules
+  - .git
+  - dist
+  - build
+  - __pycache__
