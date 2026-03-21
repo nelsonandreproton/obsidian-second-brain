@@ -62,6 +62,8 @@
 ## Links
 
 - [[system]] — back to overview
+- [[projects/{{ProjectName}}/{{ProjectName}}-history]]
+- [[projects/{{ProjectName}}/{{ProjectName}}-spec]]
 - [[patterns/stack]] — shared stack patterns
 - {{external_link_1}}
 

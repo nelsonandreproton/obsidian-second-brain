@@ -24,8 +24,9 @@ The Obsidian graph view acts as the visual knowledge graph: wikilinks between no
 
 - **Vault** — the Obsidian folder that stores all knowledge (`obsidian_vault_path` in config)
 - **system.md** — master index: all projects, patterns, key decisions
-- **projects/<n>/project.md** — per-project details, stack, links, status
-- **projects/<n>/history.md** — session changelog (what changed, when, by whom)
+- **projects/<n>/<n>.md** — per-project details, stack, links, status (loaded as context)
+- **projects/<n>/<n>-history.md** — session changelog (what changed, when, by whom)
+- **projects/<n>/<n>-spec.md** — technical specification: APIs, data models, env vars, deployment (documentation only — NOT loaded as context)
 - **patterns/** — reusable knowledge across projects (stack, architecture decisions)
 - **amendments/** — proposed skill patches with rationale and evaluation results
 - **logs/skill_runs.csv** — audit trail of every skill action (feeds the Inspect loop)
@@ -148,11 +149,13 @@ Expand `~` to actual home path. Fail loudly if `obsidian_vault_path` doesn't exi
   system.md
   projects/
     GarminBot/
-      project.md
-      history.md
-    cncSearch/
-      project.md
-      history.md
+      GarminBot.md               ← context note (loaded by `context` command)
+      GarminBot-history.md       ← session changelog
+      GarminBot-spec.md          ← technical spec (documentation only, not loaded as context)
+    CNCSearch/
+      CNCSearch.md
+      CNCSearch-history.md
+      CNCSearch-spec.md
   patterns/
     stack.md
     decisions.md
@@ -163,6 +166,7 @@ Expand `~` to actual home path. Fail loudly if `obsidian_vault_path` doesn't exi
   SKILL.v2.md
   templates/
     project_template.md
+    spec_template.md
     system_template.md
     history_template.md
     amendment_template.md
@@ -188,12 +192,14 @@ Expand `~` to actual home path. Fail loudly if `obsidian_vault_path` doesn't exi
 7. Log to CSV
 
 **Scan routine** (per project folder):
-1. Skip if `projects/<n>/project.md` exists and `--force` not set
-2. Read `scan_targets` in order — stop after 3 found, max `scan_max_lines` each
-3. Extract: name, purpose (1–2 sentences), tech stack, services/ports, URLs
-4. Fill `project_template.md` → write `projects/<n>/project.md`
-5. Write `projects/<n>/history.md` from `history_template.md`
-6. Add `[[projects/Name/project]]` wikilink to `system.md` projects table
+1. **Migration check:** if old `projects/<n>/project.md` exists but `projects/<n>/<n>.md` does not → rename `project.md` → `<n>.md` and `history.md` → `<n>-history.md` automatically, report the rename
+2. Skip if `projects/<n>/<n>.md` already exists and `--force` not set
+3. Read `scan_targets` in order — stop after 3 found, max `scan_max_lines` each
+4. Extract: name, purpose (1–2 sentences), tech stack, services/ports, URLs
+5. Fill `project_template.md` → write `projects/<n>/<n>.md`
+6. Write `projects/<n>/<n>-history.md` from `history_template.md`
+7. Write `projects/<n>/<n>-spec.md` from `spec_template.md` — populate with env vars, ports, data models, deployment notes extracted from scan files
+8. Add `[[projects/Name/Name]]` wikilink to `system.md` projects table
    (this wikilink is the graph edge — essential for Obsidian graph view)
 
 **CLAUDE.md bridge:** After init, offer to create a `CLAUDE.md` in each project folder:
@@ -214,14 +220,15 @@ Run: `load context` to initialise session memory.
 1. Identify project (from cwd, explicit name, or ask)
 2. Re-run scan routine on that project folder
 3. Show diff: what changed (2–3 lines max)
-4. Append to `projects/<n>/history.md`:
+4. Append to `projects/<n>/<n>-history.md`:
    ```markdown
    ## {ISO date} — Sync
    - Updated: {changed fields}
    - Notes: {brief summary}
    ```
-5. Update `system.md` entry if status or description changed
-6. Log to CSV
+5. Update `projects/<n>/<n>-spec.md` if env vars, ports, or data models changed
+6. Update `system.md` entry if status or description changed
+7. Log to CSV
 
 ---
 
@@ -233,11 +240,12 @@ This is the **most used command** — keep it fast and lean.
 **Steps:**
 1. Identify project (cwd name → known projects, or ask)
 2. Read `system.md` patterns section + project entry
-3. Read `projects/<n>/project.md`
-4. Read last 3 entries from `projects/<n>/history.md`
+3. Read `projects/<n>/<n>.md`
+4. Read last 3 entries from `projects/<n>/<n>-history.md`
 5. Read `patterns/stack.md` and `patterns/decisions.md`
-6. Output **Context Summary** (format below)
-7. Log to CSV
+6. Do NOT read `<n>-spec.md` — it is documentation, not session context
+7. Output **Context Summary** (format below)
+8. Log to CSV
 
 **Context Summary:**
 ```
@@ -248,7 +256,7 @@ This is the **most used command** — keep it fast and lean.
 **Key services:** {ports/services}
 **Last session:** {date} — {one line summary}
 **Patterns active:** {relevant patterns}
-**Open items:** {TODOs from project.md}
+**Open items:** {TODOs from <n>.md}
 
 Ready. What are we working on?
 ```
@@ -261,7 +269,7 @@ Ready. What are we working on?
 
 **Steps:**
 1. Infer from conversation (or ask): what was done, any open items, any new patterns
-2. Append entry to `projects/<n>/history.md`
+2. Append entry to `projects/<n>/<n>-history.md`
 3. If new pattern emerged, offer to add to `patterns/`
 4. Update `system.md` last-updated date
 5. Log to CSV
@@ -347,11 +355,12 @@ Wikilinks are graph edges. Place them deliberately so the Obsidian graph view is
 
 | Link | Where to place it | Purpose |
 |------|-------------------|---------|
-| `[[projects/X/project]]` | system.md projects table | project exists in graph |
-| `[[projects/X/history]]` | project.md | connects project ↔ history |
-| `[[patterns/stack]]` | project.md Links section | shared stack visible in graph |
-| `[[patterns/decisions]]` | project.md or history.md | decision applies to project |
-| `[[amendments/SKILL_vN_patch]]` | system.md or history.md | amendment visible from project |
+| `[[projects/X/X]]` | system.md projects table | project node in graph |
+| `[[projects/X/X-history]]` | X.md | connects project ↔ history |
+| `[[projects/X/X-spec]]` | X.md Links section | connects project ↔ spec |
+| `[[patterns/stack]]` | X.md Links section | shared stack visible in graph |
+| `[[patterns/decisions]]` | X.md or X-history.md | decision applies to project |
+| `[[amendments/SKILL_vN_patch]]` | system.md or X-history.md | amendment visible from project |
 | `[[ProjectName]]` | amendment files | which project triggered the fix |
 | `[[logs/skill_runs]]` | amendment files | traceability to raw failure data |
 
@@ -377,7 +386,7 @@ Wait for confirmation before writing.
 
 Read only when needed:
 - `references/obsidian_syntax.md` — wikilinks, tags, Dataview
-- `references/project_fields.md` — valid field values for project.md
+- `references/project_fields.md` — valid field values for project notes
 - `assets/templates/` — source templates (copy, never modify originals)
 
 ---
@@ -389,6 +398,6 @@ Read only when needed:
 | `config.yaml` missing | Run `setup` wizard — never proceed without it |
 | `obsidian_vault_path` doesn't exist | Stop, show exact path, offer to create |
 | Project not in vault | Offer to run `sync` to add it |
-| Scan finds no readable files | Create stub project.md, log warning, suggest amendment |
+| Scan finds no readable files | Create stub `<n>.md`, log warning, suggest amendment |
 | Duplicate `[[link]]` | Skip silently |
 | Amendment conflicts with existing patch | Show both, ask user to choose |
