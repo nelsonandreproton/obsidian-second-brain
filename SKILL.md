@@ -29,6 +29,7 @@ The Obsidian graph view acts as the visual knowledge graph: wikilinks between no
 - **projects/<n>/<n>-spec.md** — technical specification: APIs, data models, env vars, deployment (documentation only — NOT loaded as context)
 - **patterns/** — reusable knowledge across projects (stack, architecture decisions)
 - **amendments/** — proposed skill patches with rationale and evaluation results
+- **history/YYYY-MM-DD.md** — daily cross-project changelog: one file per day, aggregates all project history entries for that day
 - **logs/skill_runs.csv** — audit trail of every skill action (feeds the Inspect loop)
 
 ---
@@ -156,6 +157,9 @@ Expand `~` to actual home path. Fail loudly if `obsidian_vault_path` doesn't exi
       CNCSearch.md
       CNCSearch-history.md
       CNCSearch-spec.md
+  history/
+    2026-03-21.md              ← daily cross-project changelog
+    2026-03-22.md
   patterns/
     stack.md
     decisions.md
@@ -169,6 +173,7 @@ Expand `~` to actual home path. Fail loudly if `obsidian_vault_path` doesn't exi
     spec_template.md
     system_template.md
     history_template.md
+    history_daily_template.md
     amendment_template.md
   logs/
     skill_runs.csv
@@ -184,7 +189,7 @@ Expand `~` to actual home path. Fail loudly if `obsidian_vault_path` doesn't exi
 
 **Steps:**
 1. Read `config.yaml` (must exist — if not, run `setup` first)
-2. Create vault folder structure above
+2. Create vault folder structure above (including `history/`)
 3. Copy templates from `assets/templates/` if not already present
 4. For each path in `project_sources`: scan subdirectories as candidate projects
 5. For each candidate: run **scan routine**
@@ -228,7 +233,8 @@ Run: `load context` to initialise session memory.
    ```
 5. Update `projects/<n>/<n>-spec.md` if env vars, ports, or data models changed
 6. Update `system.md` entry if status or description changed
-7. Log to CSV
+7. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
+8. Log to CSV
 
 ---
 
@@ -272,7 +278,8 @@ Ready. What are we working on?
 2. Append entry to `projects/<n>/<n>-history.md`
 3. If new pattern emerged, offer to add to `patterns/`
 4. Update `system.md` last-updated date
-5. Log to CSV
+5. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
+6. Log to CSV
 
 ---
 
@@ -333,6 +340,29 @@ in the Obsidian graph, connecting it to the projects that triggered it.
 
 ---
 
+## Daily History
+
+`history/YYYY-MM-DD.md` is a cross-project daily changelog — one file per day, one section per project touched. It is created on first write of the day and updated on every subsequent `log` or `sync` call.
+
+**Format:**
+```markdown
+# YYYY-MM-DD
+
+## [[projects/ProjectA/ProjectA|ProjectA]]
+- {entry from ProjectA-history.md for this date}
+
+## [[projects/ProjectB/ProjectB|ProjectB]]
+- {entry from ProjectB-history.md for this date}
+```
+
+**Rules:**
+- Create the file if it doesn't exist (from `history_daily_template.md`)
+- If a section for this project already exists in today's file, append the new bullet points to it — do not create a duplicate section
+- Use `[[projects/<n>/<n>|<n>]]` as the section heading — this is the graph edge connecting the daily file to each project node
+- Keep entries concise: mirror what was written in `<n>-history.md`, no duplication of detail
+
+---
+
 ## Logging
 
 Every action appends one row to `{logs_folder}/skill_runs.csv`:
@@ -356,6 +386,7 @@ Wikilinks are graph edges. Place them deliberately so the Obsidian graph view is
 | Link | Where to place it | Purpose |
 |------|-------------------|---------|
 | `[[projects/X/X]]` | system.md projects table | project node in graph |
+| `[[projects/X/X\|X]]` | history/YYYY-MM-DD.md section headings | daily file → project edges |
 | `[[projects/X/X-history]]` | X.md | connects project ↔ history |
 | `[[projects/X/X-spec]]` | X.md Links section | connects project ↔ spec |
 | `[[patterns/stack]]` | X.md Links section | shared stack visible in graph |
