@@ -161,13 +161,15 @@ Never silently fall back to a default path.
   system.md
   projects/
     GarminBot/
-      GarminBot.md               ← context note (loaded by `context` command)
-      GarminBot-history.md       ← session changelog
-      GarminBot-spec.md          ← technical spec (documentation only, not loaded as context)
+      GarminBot.md                        ← context note (loaded by `context` command)
+      GarminBot-history.md                ← session changelog
+      GarminBot-spec.md                   ← technical spec (documentation only, not loaded as context)
+      GarminBot-lessons-learned.md        ← accumulated lessons: bugs, gotchas, decisions worth remembering
     CNCSearch/
       CNCSearch.md
       CNCSearch-history.md
       CNCSearch-spec.md
+      CNCSearch-lessons-learned.md
   history/
     2026-03-21.md              ← daily cross-project changelog
     2026-03-22.md
@@ -185,6 +187,7 @@ Never silently fall back to a default path.
     system_template.md
     history_template.md
     history_daily_template.md
+    lessons_learned_template.md
     amendment_template.md
   logs/
     skill_runs.csv
@@ -246,8 +249,9 @@ This file is how the skill finds the vault when invoked from a project directory
 5. Update `projects/<n>/<n>-spec.md` if env vars, ports, or data models changed
 6. Update `system.md` entry if status or description changed
 7. Check for `CLAUDE.md` in the project folder — create it if missing (same format as init bridge)
-8. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
-9. Log to CSV
+8. **Lessons learned** — propose candidates, then write confirmed ones (see **Lessons Learned** below)
+9. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
+10. Log to CSV
 
 ---
 
@@ -284,15 +288,24 @@ Ready. What are we working on?
 
 ### 4. `log` — Record a session note
 
-**When:** "log this session", "save what we did", end of work session.
+**When:** "log this session", "save what we did", "log and sync", "sync and log",
+end of work session.
+
+**Combined trigger:** If the phrase matches both `log` and `sync` intent (e.g. "log and
+sync to second brain"), run `log` first, then `sync` automatically in sequence — no second
+prompt needed. Report both actions in a single summary response.
 
 **Steps:**
 1. Infer from conversation (or ask): what was done, any open items, any new patterns
-2. Append entry to `projects/<n>/<n>-history.md`
-3. If new pattern emerged, offer to add to `patterns/`
-4. Update `system.md` last-updated date
-5. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
-6. Log to CSV
+2. **Check for existing session file** (`~/.claude/session-data/YYYY-MM-DD-*-session.tmp`):
+   if one exists, read it before writing — the ECC system may have pre-created it and the
+   Write tool requires a prior read. Enrich the existing file rather than creating a new one.
+3. Append entry to `projects/<n>/<n>-history.md`
+4. If new pattern emerged, offer to add to `patterns/`
+5. Update `system.md` last-updated date
+6. **Lessons learned** — propose candidates, then write confirmed ones (see **Lessons Learned** below)
+7. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
+8. Log to CSV
 
 ---
 
@@ -363,6 +376,7 @@ in the Obsidian graph, connecting it to the projects that triggered it.
 
 ## [[projects/ProjectA/ProjectA|ProjectA]]
 - {entry from ProjectA-history.md for this date}
+- **Lessons:** {confirmed lesson 1}; {confirmed lesson 2}
 
 ## [[projects/ProjectB/ProjectB|ProjectB]]
 - {entry from ProjectB-history.md for this date}
@@ -373,6 +387,59 @@ in the Obsidian graph, connecting it to the projects that triggered it.
 - If a section for this project already exists in today's file, append the new bullet points to it — do not create a duplicate section
 - Use `[[projects/<n>/<n>|<n>]]` as the section heading — this is the graph edge connecting the daily file to each project node
 - Keep entries concise: mirror what was written in `<n>-history.md`, no duplication of detail
+- Only include a `**Lessons:**` line if there are confirmed lessons for that project on that day; omit if none
+
+---
+
+## Lessons Learned
+
+`projects/<n>/<n>-lessons-learned.md` accumulates durable knowledge from sessions — bugs discovered, gotchas, architecture decisions, process insights — anything future-Claude shouldn't have to rediscover.
+
+### When to run
+During `sync` and `log`, after writing the history entry.
+
+### Proposal flow (always interactive)
+
+1. Review the conversation and the history entry just written
+2. Identify candidates: process lessons, debugging findings, architecture decisions, gotchas — both categories count
+3. Present candidates to the user:
+   ```
+   Proposed lessons learned:
+   1. Don't retry on Garmin 429 — retrying worsens the ban; stop immediately and surface a wait message
+   2. arnoldspumpclub.com is Shopify (/blogs/newsletter/<slug>), not Beehiiv — verify HTML structure before building scrapers
+   3. Rolling date windows in tests instead of fixed past dates — avoids fixtures silently expiring
+
+   Keep all? Skip any? Edit any? (e.g. "keep 1,3 / skip 2 / edit 1: ...")
+   ```
+4. Wait for confirmation. Do not write anything until the user responds.
+5. If user says "skip" or "none", write nothing — do not create the file for this session.
+
+### Writing
+
+**`projects/<n>/<n>-lessons-learned.md`** — append-only, one dated block per session:
+```markdown
+# {ProjectName} — Lessons Learned
+
+[[projects/{n}/{n}]]
+
+## {ISO date}
+- {confirmed lesson}
+- {confirmed lesson}
+```
+
+- Create the file from `lessons_learned_template.md` if it doesn't exist
+- If the file exists and already has an entry for today's date, append bullets to that block — do not create a duplicate date heading
+- Keep lessons actionable and specific — not "be careful with dates" but "use `date.today() - timedelta(days=N)` in fixtures, never fixed past dates"
+
+**`history/{ISO date}.md`** — add a `**Lessons:**` inline to the project section:
+```markdown
+- **Lessons:** {lesson 1}; {lesson 2}
+```
+- Semicolon-separated on one line; keep each lesson brief (10–15 words max)
+- Only add if there are confirmed lessons; omit the line entirely if none
+
+### Obsidian graph
+Add `[[projects/<n>/<n>-lessons-learned]]` wikilink to `<n>.md` Links section (once, on first creation).
 
 ---
 
@@ -402,6 +469,7 @@ Wikilinks are graph edges. Place them deliberately so the Obsidian graph view is
 | `[[projects/X/X\|X]]` | history/YYYY-MM-DD.md section headings | daily file → project edges |
 | `[[projects/X/X-history]]` | X.md | connects project ↔ history |
 | `[[projects/X/X-spec]]` | X.md Links section | connects project ↔ spec |
+| `[[projects/X/X-lessons-learned]]` | X.md Links section | connects project ↔ lessons (added on first creation) |
 | `[[patterns/stack]]` | X.md Links section | shared stack visible in graph |
 | `[[patterns/decisions]]` | X.md or X-history.md | decision applies to project |
 | `[[amendments/SKILL_vN_patch]]` | system.md or X-history.md | amendment visible from project |
