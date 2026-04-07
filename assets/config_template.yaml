@@ -30,6 +30,9 @@ scan_targets:
 # Max lines to read per file during scan (keeps context lean)
 scan_max_lines: 80
 
+# Days before vault notes are considered stale vs. actual project files
+stale_threshold_days: 7
+
 # Projects to always skip during init scan
 scan_ignore:
   - node_modules

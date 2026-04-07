@@ -110,6 +110,7 @@ amendments_folder: amendments
 logs_folder: logs
 system_file: system.md
 skill_version: 1                    # incremented on each accepted amendment
+stale_threshold_days: 7             # warn when project is newer than notes by this many days
 
 project_sources:
   - ~/projects
@@ -239,19 +240,29 @@ This file is how the skill finds the vault when invoked from a project directory
 **Steps:**
 1. Identify project (from cwd, explicit name, or ask)
 2. Re-run scan routine on that project folder
-3. Show diff: what changed (2–3 lines max)
-4. Append to `projects/<n>/<n>-history.md`:
+3. **Git context** — run in the project directory:
+   - `git log --oneline -10` → recent commits since last sync (use to enrich the diff summary)
+   - `git status --short` → current state
+   - `git branch --show-current` → active branch
+   - `git diff --stat HEAD` → files changed since last commit
+4. Show diff: what changed (2–3 lines max), enriched with recent commits
+5. Append to `projects/<n>/<n>-history.md`:
    ```markdown
    ## {ISO date} — Sync
    - Updated: {changed fields}
    - Notes: {brief summary}
    ```
-5. Update `projects/<n>/<n>-spec.md` if env vars, ports, or data models changed
-6. Update `system.md` entry if status or description changed
-7. Check for `CLAUDE.md` in the project folder — create it if missing (same format as init bridge)
-8. **Lessons learned** — propose candidates, then write confirmed ones (see **Lessons Learned** below)
-9. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
-10. Log to CSV
+6. Update `projects/<n>/<n>-spec.md` if env vars, ports, or data models changed
+7. Update `system.md` entry if status or description changed
+8. Check for `CLAUDE.md` in the project folder — create it if missing (same format as init bridge)
+9. **Lessons learned** — propose candidates, then write confirmed ones (see **Lessons Learned** below)
+10. **Cross-project patterns** — after lessons are confirmed, scan all other `projects/*/<n>.md`
+    files for matching `stack:` entries. If ≥ 2 other projects share the same stack component
+    involved in a confirmed lesson, propose: *"This lesson may apply to [ProjectX, ProjectY]
+    (same stack component). Add a cross-reference to `patterns/stack.md`? (yes/skip)"*
+    Present the proposal before writing anything. Wait for confirmation.
+11. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
+12. Log to CSV
 
 ---
 
@@ -261,14 +272,36 @@ This file is how the skill finds the vault when invoked from a project directory
 This is the **most used command** — keep it fast and lean.
 
 **Steps:**
-1. Identify project (cwd name → known projects, or ask)
-2. Read `system.md` patterns section + project entry
-3. Read `projects/<n>/<n>.md`
-4. Read last 3 entries from `projects/<n>/<n>-history.md`
-5. Read `patterns/stack.md` and `patterns/decisions.md`
-6. Do NOT read `<n>-spec.md` — it is documentation, not session context
-7. Output **Context Summary** (format below)
-8. Log to CSV
+1. **Pending failure check** — silently scan `logs/skill_runs.csv` for any command with
+   failures ≥ `inspect_failure_threshold`. For each such command, check `amendments/`
+   for any file containing the string `command \`{command}\`` in its "Triggered by:" line —
+   if found, treat that command as already addressed and skip it. Surface a nudge only for
+   unaddressed commands, at the very end of the Context Summary; do not interrupt loading.
+2. Identify project (cwd name → known projects, or ask)
+3. **Stale check** — compare the file modification time of `projects/<n>/<n>.md` against
+   the most recently modified scan target file in the project directory (use `stat` or
+   equivalent). If the project source file is newer than the vault note by more than
+   `stale_threshold_days`, flag it — append after the Context Summary:
+   *"⚠️ Notes are X days old — project was modified more recently. Sync first? (yes/skip)"*
+   Do not block loading; always output the Context Summary first.
+4. **Intent detection** — parse the user's current message (or session opener) to decide
+   what extra files to load beyond the defaults:
+   - Bug / error / failing / traceback / exception → also load `projects/<n>/<n>-lessons-learned.md`
+   - Architecture / design / refactor / spec / model → also load `projects/<n>/<n>-spec.md`
+   - Names another known project → also load that project's `<n>.md` (one level only —
+     do not recursively load projects mentioned within the loaded notes)
+   - Default: load only the files listed in steps 5–7 below
+5. Read `system.md` patterns section + project entry
+6. Read `projects/<n>/<n>.md`
+7. Read last 3 entries from `projects/<n>/<n>-history.md`
+8. Read `patterns/stack.md` and `patterns/decisions.md`
+9. **Git context** — run in the project directory:
+   - `git log --oneline -10` → recent commits
+   - `git status --short` → current state
+   - `git branch --show-current` → active branch
+   - `git diff --stat HEAD` → files changed since last commit
+10. Output **Context Summary** (format below)
+11. Log to CSV
 
 **Context Summary:**
 ```
@@ -277,11 +310,20 @@ This is the **most used command** — keep it fast and lean.
 **Purpose:** {one sentence}
 **Stack:** {comma list}
 **Key services:** {ports/services}
+**Branch:** {current branch} | **Last commit:** {hash} {message}
+**Recent work:** {last 3 commits, one line each}
+**Currently changed:** {git status summary, or "clean" if nothing}
 **Last session:** {date} — {one line summary}
 **Patterns active:** {relevant patterns}
 **Open items:** {TODOs from <n>.md}
 
 Ready. What are we working on?
+```
+
+If pending failures were found in step 1, append:
+```
+---
+⚠️ {N} `{command}` failures logged since last inspect — run `inspect skill`?
 ```
 
 ---
@@ -304,8 +346,13 @@ prompt needed. Report both actions in a single summary response.
 4. If new pattern emerged, offer to add to `patterns/`
 5. Update `system.md` last-updated date
 6. **Lessons learned** — propose candidates, then write confirmed ones (see **Lessons Learned** below)
-7. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
-8. Log to CSV
+7. **Cross-project patterns** — after lessons are confirmed, scan all other `projects/*/<n>.md`
+   files for matching `stack:` entries. If ≥ 2 other projects share the same stack component
+   involved in a confirmed lesson, propose: *"This lesson may apply to [ProjectX, ProjectY]
+   (same stack component). Add a cross-reference to `patterns/stack.md`? (yes/skip)"*
+   Present the proposal before writing anything. Wait for confirmation.
+8. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
+9. Log to CSV
 
 ---
 
@@ -513,3 +560,4 @@ Read only when needed:
 | Scan finds no readable files | Create stub `<n>.md`, log warning, suggest amendment |
 | Duplicate `[[link]]` | Skip silently |
 | Amendment conflicts with existing patch | Show both, ask user to choose |
+| Git command fails (not a repo, no commits, git not in PATH) | Omit all git fields from Context Summary, continue normally; do not surface an error |
