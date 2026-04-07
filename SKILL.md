@@ -137,6 +137,8 @@ scan_ignore:
   - __pycache__
 
 inspect_failure_threshold: 3       # trigger inspect suggestion after N failures on same command
+log_file: log.md                    # human-readable append-only activity log (Obsidian-visible)
+lint_auto_interval: 10              # suggest lint after every N log/sync calls (checked via log.md count)
 ```
 
 Expand `~` to actual home path. Fail loudly if `obsidian_vault_path` doesn't exist.
@@ -191,7 +193,8 @@ Never silently fall back to a default path.
     lessons_learned_template.md
     amendment_template.md
   logs/
-    skill_runs.csv
+    skill_runs.csv          ← machine-readable audit trail (feeds inspect)
+    log.md                  ← human-readable append-only activity log (visible in Obsidian graph)
 ```
 
 ---
@@ -221,6 +224,43 @@ Never silently fall back to a default path.
 7. Write `projects/<n>/<n>-spec.md` from `spec_template.md` — populate with env vars, ports, data models, deployment notes extracted from scan files
 8. Add `[[projects/Name/Name]]` wikilink to `system.md` projects table
    (this wikilink is the graph edge — essential for Obsidian graph view)
+
+**`system.md` format** — a content-oriented catalog, not just a list. Rebuild fully on
+`init`, update incrementally on `sync` and `log`:
+
+```markdown
+# Second Brain — System Index
+
+[[logs/log]] | [[patterns/stack]] | [[patterns/decisions]]
+
+## By Stack
+Group projects under their primary stack/runtime. Update groupings on sync.
+
+### Python
+- [[projects/GarminBot/GarminBot]] — Garmin health data → Telegram bot
+- [[projects/cncSearch/cncSearch]] — CNC machine parts search API
+
+### Docker / Infrastructure
+- [[projects/homeserver/homeserver]] — Home lab Docker stack
+
+## All Projects
+
+| Project | Stack | Status | Last sync |
+|---------|-------|--------|-----------|
+| [[projects/GarminBot/GarminBot\|GarminBot]] | Python, Docker | active | 2026-04-07 |
+
+## Patterns
+- [[patterns/stack]] — shared stack conventions across projects
+- [[patterns/decisions]] — architectural decisions log
+
+## Amendments
+- [[amendments/SKILL_v2_patch]] — lessons-learned system (accepted)
+```
+
+Rules:
+- Keep the "By Stack" section grouped — reassign projects when their stack changes
+- Update the "Last sync" date on every `sync` and `log` call for that project
+- The wikilinks in every section are the graph edges — never omit them
 
 **CLAUDE.md bridge:** After init, create a `CLAUDE.md` in each project folder (skip if one already exists):
 ```markdown
@@ -262,7 +302,11 @@ This file is how the skill finds the vault when invoked from a project directory
     (same stack component). Add a cross-reference to `patterns/stack.md`? (yes/skip)"*
     Present the proposal before writing anything. Wait for confirmation.
 11. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
-12. Log to CSV
+12. Append `[INGEST]` entry to `logs/log.md` (see **Logging** below)
+13. Log to CSV
+14. **Lint nudge** — count `[INGEST]` + `[SESSION]` entries in `log.md`; if the count is a
+    multiple of `lint_auto_interval`, append at end of response: *"Vault health check due —
+    run `lint vault`?"*
 
 ---
 
@@ -301,7 +345,8 @@ This is the **most used command** — keep it fast and lean.
    - `git branch --show-current` → active branch
    - `git diff --stat HEAD` → files changed since last commit
 10. Output **Context Summary** (format below)
-11. Log to CSV
+11. Append `[QUERY]` entry to `logs/log.md` (see **Logging** below)
+12. Log to CSV
 
 **Context Summary:**
 ```
@@ -351,8 +396,22 @@ prompt needed. Report both actions in a single summary response.
    involved in a confirmed lesson, propose: *"This lesson may apply to [ProjectX, ProjectY]
    (same stack component). Add a cross-reference to `patterns/stack.md`? (yes/skip)"*
    Present the proposal before writing anything. Wait for confirmation.
-8. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
-9. Log to CSV
+8. **Store synthesis** — review the conversation for any valuable output beyond lessons:
+   architectural decisions, reusable design patterns, conceptual breakthroughs, or
+   non-obvious solutions. If found, propose:
+   *"This session produced [X]. File to vault? (yes: patterns/decisions / yes: patterns/stack /
+   yes: new page in patterns/ / skip)"*
+   Wait for confirmation before writing. Keep entries actionable and specific.
+9. **Periodic patterns synthesis** — count `[SESSION]` entries in `log.md`; every 5th entry,
+   scan ALL `*-lessons-learned.md` files for themes mentioned ≥ 3 times across different
+   projects (same library, same error type, same architectural pattern). Propose consolidating
+   recurring themes into `patterns/stack.md` or `patterns/decisions.md`:
+   *"Recurring theme detected across N projects: [theme]. Add to `patterns/`? (yes/skip)"*
+   Wait for confirmation.
+10. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
+11. Append `[SESSION]` entry to `logs/log.md` (see **Logging** below)
+12. Log to CSV
+13. **Lint nudge** — same check as in `sync` step 14.
 
 ---
 
@@ -377,6 +436,8 @@ prompt needed. Report both actions in a single summary response.
   - Log to CSV with `project=_skill`
 
 **If no:** Log decision, keep amendment file for future reference (visible in Obsidian graph).
+
+**Either way:** Append `[AMEND]` entry to `logs/log.md`. Log to CSV with `project=_skill`.
 
 **Amendment file format** (`amendments/SKILL_v{N}_patch.md`):
 ```markdown
@@ -410,6 +471,44 @@ prompt needed. Report both actions in a single summary response.
 
 The `[[ProjectName]]` and `[[logs/skill_runs]]` wikilinks make this amendment node visible
 in the Obsidian graph, connecting it to the projects that triggered it.
+
+---
+
+### 6. `lint` — Vault health check
+
+**When:** "lint vault", "check vault health", "find orphan pages", "check for broken links",
+or automatically suggested when `log.md` entry count reaches a multiple of `lint_auto_interval`.
+
+**Steps:**
+1. **Broken wikilinks** — scan all vault `.md` files for `[[...]]` patterns; verify each
+   target path resolves to an existing file. List broken links with their source file.
+2. **Orphan pages** — find `.md` files in `projects/` and `patterns/` with no inbound
+   wikilinks from any other vault file. These are candidates for archiving or reconnecting.
+3. **Stale notes** — run the stale check (file mtime comparison) for ALL tracked projects
+   at once, not just the current one. List every project overdue for sync.
+4. **Missing CLAUDE.md bridges** — list project folders in `project_sources` that exist on
+   disk but have no `CLAUDE.md` file.
+5. **Spec contradictions** — for each project, compare the `stack:` field in `<n>.md`
+   against the tech stack mentioned in `<n>-spec.md`. Flag mismatches.
+6. **Output lint report:**
+   ```
+   ## 🔍 Vault Lint Report — {ISO date}
+
+   **Broken links:** {N} — {list}
+   **Orphan pages:** {N} — {list}
+   **Stale notes:** {N} — {list with days overdue}
+   **Missing CLAUDE.md:** {N} — {list}
+   **Spec contradictions:** {N} — {list}
+   ```
+7. Ask: "Auto-fix what's possible? (yes/skip)"
+
+**Auto-fixable (with confirmation):** Missing CLAUDE.md bridges (create them using init
+bridge format). Orphan pages that have a matching project — add the missing wikilink.
+
+**Manual only:** Broken links (target file may need creating or link needs correcting),
+spec contradictions (requires human judgement on which version is correct).
+
+8. Append `[LINT]` entry to `logs/log.md` (see **Logging** below). Log to CSV.
 
 ---
 
@@ -492,7 +591,9 @@ Add `[[projects/<n>/<n>-lessons-learned]]` wikilink to `<n>.md` Links section (o
 
 ## Logging
 
-Every action appends one row to `{logs_folder}/skill_runs.csv`:
+Every action writes to **two** logs — one machine-readable, one human-readable.
+
+### `logs/skill_runs.csv` — machine-readable (feeds `inspect`)
 
 ```
 timestamp,project,command,success,error_notes
@@ -501,8 +602,54 @@ timestamp,project,command,success,error_notes
 2025-03-21T15:00:00,_skill,inspect,true,amendment v2 accepted
 ```
 
-Use `_skill` as project name for meta-actions (inspect, setup, init).
+Use `_skill` as project name for meta-actions (inspect, setup, init, lint).
 Create header row if file doesn't exist. Never overwrite existing rows.
+
+### `logs/log.md` — human-readable (visible in Obsidian graph)
+
+Append-only markdown file. One entry per action, with a consistent prefix tag for
+parseability. Create with a `# Activity Log` header if it doesn't exist.
+
+**Entry format:**
+```markdown
+## [{TAG}] {ISO date} — {ProjectName or _skill}: {one-line summary}
+- {detail line 1}
+- {detail line 2}
+[[projects/{n}/{n}]]
+```
+
+**Tags:**
+| Tag | Used for |
+|-----|----------|
+| `[INGEST]` | `sync` — project notes updated |
+| `[QUERY]` | `context` — context loaded for a session |
+| `[SESSION]` | `log` — session note recorded |
+| `[LINT]` | `lint` — vault health check |
+| `[AMEND]` | `inspect` — skill amendment proposed/applied |
+| `[SETUP]` | `setup` / `init` — vault bootstrapped |
+
+**Example entries:**
+```markdown
+## [INGEST] 2026-04-07 — GarminBot: sync after Garmin 429 fix
+- Updated: README.md (stack), docker-compose.yml (new service)
+- Lessons confirmed: 1
+- Stale check: was 6 days overdue
+[[projects/GarminBot/GarminBot]]
+
+## [QUERY] 2026-04-07 — GarminBot: context loaded (debug intent)
+- Branch: main | Last commit: abc1234 fix: stop retrying on 429
+- Extra files loaded: lessons-learned (debug keywords detected)
+[[projects/GarminBot/GarminBot]]
+
+## [LINT] 2026-04-07 — _skill: vault health check
+- Broken links: 0 | Orphan pages: 2 | Stale: cncSearch (14d)
+- Missing CLAUDE.md: hetznercheck
+- Auto-fixed: 1 CLAUDE.md created
+[[logs/skill_runs]]
+```
+
+Add `[[logs/log]]` wikilink to `system.md` (once, on first creation) so the log is
+reachable from the graph root.
 
 ---
 
@@ -522,6 +669,7 @@ Wikilinks are graph edges. Place them deliberately so the Obsidian graph view is
 | `[[amendments/SKILL_vN_patch]]` | system.md or X-history.md | amendment visible from project |
 | `[[ProjectName]]` | amendment files | which project triggered the fix |
 | `[[logs/skill_runs]]` | amendment files | traceability to raw failure data |
+| `[[logs/log]]` | system.md (once) | activity log reachable from graph root |
 
 Never add duplicate wikilinks in the same file.
 
