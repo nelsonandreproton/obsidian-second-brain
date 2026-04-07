@@ -256,7 +256,7 @@ This file is how the skill finds the vault when invoked from a project directory
 7. Update `system.md` entry if status or description changed
 8. Check for `CLAUDE.md` in the project folder — create it if missing (same format as init bridge)
 9. **Lessons learned** — propose candidates, then write confirmed ones (see **Lessons Learned** below)
-10. **Cross-project patterns** — after lessons are confirmed, scan all other `projects/*/X.md`
+10. **Cross-project patterns** — after lessons are confirmed, scan all other `projects/*/<n>.md`
     files for matching `stack:` entries. If ≥ 2 other projects share the same stack component
     involved in a confirmed lesson, propose: *"This lesson may apply to [ProjectX, ProjectY]
     (same stack component). Add a cross-reference to `patterns/stack.md`? (yes/skip)"*
@@ -273,20 +273,23 @@ This is the **most used command** — keep it fast and lean.
 
 **Steps:**
 1. **Pending failure check** — silently scan `logs/skill_runs.csv` for any command with
-   failures ≥ `inspect_failure_threshold` not yet addressed by an existing amendment.
-   If found, note it — surface the nudge at the very end of the Context Summary only;
-   do not interrupt loading.
+   failures ≥ `inspect_failure_threshold`. For each such command, check `amendments/`
+   for any file containing the string `command \`{command}\`` in its "Triggered by:" line —
+   if found, treat that command as already addressed and skip it. Surface a nudge only for
+   unaddressed commands, at the very end of the Context Summary; do not interrupt loading.
 2. Identify project (cwd name → known projects, or ask)
-3. **Stale check** — compare the note's `updated:` frontmatter date against the most
-   recently modified scan target file in the project directory. If the project is newer
-   than the note by more than `stale_threshold_days`, flag it — append after the Context
-   Summary: *"⚠️ Notes are X days old — project was modified more recently. Sync first?
-   (yes/skip)"* Do not block loading; always output the Context Summary first.
+3. **Stale check** — compare the file modification time of `projects/<n>/<n>.md` against
+   the most recently modified scan target file in the project directory (use `stat` or
+   equivalent). If the project source file is newer than the vault note by more than
+   `stale_threshold_days`, flag it — append after the Context Summary:
+   *"⚠️ Notes are X days old — project was modified more recently. Sync first? (yes/skip)"*
+   Do not block loading; always output the Context Summary first.
 4. **Intent detection** — parse the user's current message (or session opener) to decide
    what extra files to load beyond the defaults:
    - Bug / error / failing / traceback / exception → also load `projects/<n>/<n>-lessons-learned.md`
    - Architecture / design / refactor / spec / model → also load `projects/<n>/<n>-spec.md`
-   - Names another known project → also load that project's `<n>.md`
+   - Names another known project → also load that project's `<n>.md` (one level only —
+     do not recursively load projects mentioned within the loaded notes)
    - Default: load only the files listed in steps 5–7 below
 5. Read `system.md` patterns section + project entry
 6. Read `projects/<n>/<n>.md`
@@ -343,7 +346,7 @@ prompt needed. Report both actions in a single summary response.
 4. If new pattern emerged, offer to add to `patterns/`
 5. Update `system.md` last-updated date
 6. **Lessons learned** — propose candidates, then write confirmed ones (see **Lessons Learned** below)
-7. **Cross-project patterns** — after lessons are confirmed, scan all other `projects/*/X.md`
+7. **Cross-project patterns** — after lessons are confirmed, scan all other `projects/*/<n>.md`
    files for matching `stack:` entries. If ≥ 2 other projects share the same stack component
    involved in a confirmed lesson, propose: *"This lesson may apply to [ProjectX, ProjectY]
    (same stack component). Add a cross-reference to `patterns/stack.md`? (yes/skip)"*
@@ -557,3 +560,4 @@ Read only when needed:
 | Scan finds no readable files | Create stub `<n>.md`, log warning, suggest amendment |
 | Duplicate `[[link]]` | Skip silently |
 | Amendment conflicts with existing patch | Show both, ask user to choose |
+| Git command fails (not a repo, no commits, git not in PATH) | Omit all git fields from Context Summary, continue normally; do not surface an error |
