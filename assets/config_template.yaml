@@ -40,3 +40,14 @@ scan_ignore:
   - dist
   - build
   - __pycache__
+
+amendments_folder: amendments   # relative to vault root
+raw_folder: raw                  # immutable source documents (never modified by Claude)
+knowledge_folder: knowledge      # LLM-generated wiki from ingested sources
+me_file: me.md                   # personal context loaded during every ingest
+
+skill_version: 1                 # incremented on each accepted amendment
+log_file: log.md                 # human-readable append-only activity log
+lint_auto_interval: 10           # suggest lint after every N log/sync calls
+inspect_failure_threshold: 3     # trigger inspect suggestion after N failures on same command
+log_queries: false               # set to true to log every context load (verbose)

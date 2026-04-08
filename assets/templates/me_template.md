@@ -1,3 +1,5 @@
+> ⚠️ **Privacy:** If your vault is in a public git repo, add `me.md` to `.gitignore` or keep only non-sensitive content here.
+
 ---
 type: personal-context
 updated: {{date}}

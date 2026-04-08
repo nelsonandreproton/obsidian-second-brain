@@ -142,6 +142,7 @@ scan_ignore:
 inspect_failure_threshold: 3       # trigger inspect suggestion after N failures on same command
 log_file: log.md                    # human-readable append-only activity log (Obsidian-visible)
 lint_auto_interval: 10              # suggest lint after every N log/sync calls (checked via log.md count)
+log_queries: false              # set to true to log [QUERY] entries for every context load (can be verbose)
 ```
 
 Expand `~` to actual home path. Fail loudly if `obsidian_vault_path` doesn't exist.
@@ -319,7 +320,7 @@ This file is how the skill finds the vault when invoked from a project directory
     (same stack component). Add a cross-reference to `patterns/stack.md`? (yes/skip)"*
     Present the proposal before writing anything. Wait for confirmation.
 11. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
-12. Append `[INGEST]` entry to `logs/log.md` (see **Logging** below)
+12. Append `[INGEST]` entry to `logs/log.md` (see **Logging** below; create file with `# Activity Log` header if not yet present)
 13. Log to CSV
 14. **Lint nudge** — count `[INGEST]` + `[SESSION]` entries in `log.md`; if the count is a
     multiple of `lint_auto_interval`, append at end of response: *"Vault health check due —
@@ -364,7 +365,7 @@ This is the **most used command** — keep it fast and lean.
    - `git branch --show-current` → active branch
    - `git diff --stat HEAD` → files changed since last commit
 10. Output **Context Summary** (format below)
-11. Append `[QUERY]` entry to `logs/log.md` (see **Logging** below)
+11. Append `[QUERY]` entry to `logs/log.md` only if `log_queries: true` in config (see **Logging** below; create file with `# Activity Log` header if not yet present)
 12. Log to CSV
 
 **Context Summary:**
@@ -399,7 +400,7 @@ end of work session.
 
 **Combined trigger:** If the phrase matches both `log` and `sync` intent (e.g. "log and
 sync to second brain"), run `log` first, then `sync` automatically in sequence — no second
-prompt needed. Report both actions in a single summary response.
+prompt needed. Report both actions in a single summary response. When running as combined trigger, skip the cross-project pattern check in `sync` (step 10) — it will be covered by `log` step 7.
 
 **Steps:**
 1. Infer from conversation (or ask): what was done, any open items, any new patterns
@@ -428,7 +429,7 @@ prompt needed. Report both actions in a single summary response.
    *"Recurring theme detected across N projects: [theme]. Add to `patterns/`? (yes/skip)"*
    Wait for confirmation.
 10. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
-11. Append `[SESSION]` entry to `logs/log.md` (see **Logging** below)
+11. Append `[SESSION]` entry to `logs/log.md` (see **Logging** below; create file with `# Activity Log` header if not yet present)
 12. Log to CSV
 13. **Lint nudge** — same check as in `sync` step 14.
 
@@ -544,13 +545,14 @@ human review and deliberate implementation.
 **Steps:**
 
 1. **Identify and convert source**
-   - Accept: path to file in `raw/`, URL, pasted markdown, or file reference
-   - If PDF → extract text to markdown; if URL → fetch and convert; if image → describe
+   - Accept: path to file in `raw/`, pasted markdown, or file reference (preferred)
+   - URLs are accepted but require explicit confirmation before fetching: "Fetch `{url}`? This will make a network request. (yes/no)"
+   - If PDF → extract text to markdown; if URL → fetch and convert only after confirmation; if image → describe
    - Confirm format with user before proceeding
 
 2. **Load context**
    - Read `me.md` → personal goals, strengths, projects, style
-   - Read `knowledge/index.md` → existing knowledge (avoid duplication, find connections)
+   - Read `knowledge/index.md` → existing knowledge (avoid duplication, find connections); if not present, create it from `knowledge_index_template.md` before reading
    - Read `patterns/stack.md` and `patterns/decisions.md` → current approaches to challenge
 
 3. **Discuss with user**
@@ -590,13 +592,15 @@ human review and deliberate implementation.
    Add the new source and any new topic pages to the catalog.
    Update the "Last ingested" date.
 
-8. **Append `[INGEST]` entry to `logs/log.md`**. Log to CSV with `project=_knowledge`.
+8. **Append `[KNOWLEDGE]` entry to `logs/log.md`**. Log to CSV with `project=_knowledge`.
 
 **`me.md` usage during ingest:**
 - Filter insights: prioritise content relevant to the user's stated goals and projects
 - Personalise connections: "This applies to GarminBot because..."
 - Calibrate depth: match the user's current skill level — don't over-explain known concepts
 - Challenge constructively: flag gaps between the source's best practices and current work
+
+> **Privacy note:** `me.md` may contain sensitive personal context. If your vault is stored in a public git repository, add `me.md` to `.gitignore` or keep only non-sensitive content in it.
 
 ---
 
@@ -693,6 +697,8 @@ timestamp,project,command,success,error_notes
 Use `_skill` as project name for meta-actions (inspect, setup, init, lint).
 Create header row if file doesn't exist. Never overwrite existing rows.
 
+> **CSV safety:** Always wrap `error_notes` in double quotes. Escape any internal `"` as `""`. Example: `"README.md not found"`, `"token ""expired"" from API"`. This prevents CSV injection when the file is opened in spreadsheet applications.
+
 ### `logs/log.md` — human-readable (visible in Obsidian graph)
 
 Append-only markdown file. One entry per action, with a consistent prefix tag for
@@ -710,6 +716,7 @@ parseability. Create with a `# Activity Log` header if it doesn't exist.
 | Tag | Used for |
 |-----|----------|
 | `[INGEST]` | `sync` — project notes updated |
+| `[KNOWLEDGE]` | `ingest` — knowledge source processed into wiki |
 | `[QUERY]` | `context` — context loaded for a session |
 | `[SESSION]` | `log` — session note recorded |
 | `[LINT]` | `lint` — vault health check |
@@ -734,6 +741,12 @@ parseability. Create with a `# Activity Log` header if it doesn't exist.
 - Missing CLAUDE.md: hetznercheck
 - Auto-fixed: 1 CLAUDE.md created
 [[logs/skill_runs]]
+
+## [KNOWLEDGE] 2026-04-08 — _knowledge: ingested karpathy-llm-wiki
+- Source: raw/article-karpathy.md | Format: markdown
+- Topics created: agentic-workflows, context-management
+- Proposals: 1 (improve-skill-ingest.md)
+[[knowledge/index]]
 ```
 
 Add `[[logs/log]]` wikilink to `system.md` (once, on first creation) so the log is
