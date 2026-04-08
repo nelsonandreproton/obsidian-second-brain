@@ -108,6 +108,9 @@ templates_folder: templates
 patterns_folder: patterns
 amendments_folder: amendments
 logs_folder: logs
+raw_folder: raw                     # immutable source documents (never modified by Claude)
+knowledge_folder: knowledge         # LLM-generated wiki from ingested sources
+me_file: me.md                      # personal context loaded during every ingest
 system_file: system.md
 skill_version: 1                    # incremented on each accepted amendment
 stale_threshold_days: 7             # warn when project is newer than notes by this many days
@@ -195,6 +198,20 @@ Never silently fall back to a default path.
   logs/
     skill_runs.csv          ← machine-readable audit trail (feeds inspect)
     log.md                  ← human-readable append-only activity log (visible in Obsidian graph)
+  raw/                      ← immutable source documents (never modified by Claude)
+    article-karpathy.md
+    transcript-foo.md
+    ...
+  knowledge/                ← LLM-generated wiki from ingested sources
+    index.md                ← catalog of all knowledge pages
+    sources/                ← one summary page per ingested document
+      karpathy-llm-wiki.md
+    topics/                 ← concept pages (one per theme/technology/pattern)
+      agentic-workflows.md
+      context-management.md
+    proposals/              ← improvement proposals for human review (never auto-applied)
+      improve-skill-ingest.md
+  me.md                     ← personal context: goals, strengths, style, setup
 ```
 
 ---
@@ -334,6 +351,8 @@ This is the **most used command** — keep it fast and lean.
    - Architecture / design / refactor / spec / model → also load `projects/<n>/<n>-spec.md`
    - Names another known project → also load that project's `<n>.md` (one level only —
      do not recursively load projects mentioned within the loaded notes)
+   - AI engineering / prompting / agentic / context / Claude Code topic → also load
+     matching `knowledge/topics/*.md` pages and `me.md`
    - Default: load only the files listed in steps 5–7 below
 5. Read `system.md` patterns section + project entry
 6. Read `projects/<n>/<n>.md`
@@ -512,6 +531,75 @@ spec contradictions (requires human judgement on which version is correct).
 
 ---
 
+### 7. `ingest` — Process a raw source into the knowledge wiki
+
+**When:** "ingest [file]", "process this document", "add this to my knowledge base",
+"analyse this article", or when a file is dropped into the `raw/` folder.
+
+**Philosophy:** One source at a time. Claude reads and thinks; you guide what to emphasise.
+The raw file is never modified. All output lives in `knowledge/`. Nothing is auto-applied
+to existing project notes or SKILL.md — improvements go into `knowledge/proposals/` for
+human review and deliberate implementation.
+
+**Steps:**
+
+1. **Identify and convert source**
+   - Accept: path to file in `raw/`, URL, pasted markdown, or file reference
+   - If PDF → extract text to markdown; if URL → fetch and convert; if image → describe
+   - Confirm format with user before proceeding
+
+2. **Load context**
+   - Read `me.md` → personal goals, strengths, projects, style
+   - Read `knowledge/index.md` → existing knowledge (avoid duplication, find connections)
+   - Read `patterns/stack.md` and `patterns/decisions.md` → current approaches to challenge
+
+3. **Discuss with user**
+   Present a structured brief:
+   ```
+   ## Source brief: {title}
+   **Type:** {article / transcript / note / paper}
+   **Core thesis:** {1–2 sentences}
+   **Relevance to you:** {filtered through me.md — why this matters for your work}
+   **Key sections:** {list}
+
+   What would you like me to emphasise? Any sections to skip?
+   ```
+   Wait for guidance before writing anything.
+
+4. **Create source summary page** → `knowledge/sources/{slug}.md`
+   Use `knowledge_source_template.md`. Include:
+   - Summary (3–5 paragraphs)
+   - Key takeaways (bulleted, actionable)
+   - Connections to current projects (wikilinks)
+   - What this challenges in current approach
+
+5. **Update or create topic pages** → `knowledge/topics/{topic}.md`
+   For each significant concept in the source:
+   - If page exists: append new insights and add source to its Sources section
+   - If new: create from `knowledge_topic_template.md`
+   - Link topic pages to each other and to relevant project notes
+
+6. **Challenge existing approach**
+   Compare insights against `patterns/`, `SKILL.md`, and project approaches.
+   For each genuine improvement identified:
+   - Create `knowledge/proposals/{slug}.md` from `knowledge_proposal_template.md`
+   - Include: current approach, suggested change, rationale, how to implement if accepted
+   - Do NOT modify anything — proposals are read-only suggestions
+
+7. **Update knowledge/index.md**
+   Add the new source and any new topic pages to the catalog.
+   Update the "Last ingested" date.
+
+8. **Append `[INGEST]` entry to `logs/log.md`**. Log to CSV with `project=_knowledge`.
+
+**`me.md` usage during ingest:**
+- Filter insights: prioritise content relevant to the user's stated goals and projects
+- Personalise connections: "This applies to GarminBot because..."
+- Calibrate depth: match the user's current skill level — don't over-explain known concepts
+- Challenge constructively: flag gaps between the source's best practices and current work
+
+---
+
 ## Daily History
 
 `history/YYYY-MM-DD.md` is a cross-project daily changelog — one file per day, one section per project touched. It is created on first write of the day and updated on every subsequent `log` or `sync` call.
@@ -670,6 +758,11 @@ Wikilinks are graph edges. Place them deliberately so the Obsidian graph view is
 | `[[ProjectName]]` | amendment files | which project triggered the fix |
 | `[[logs/skill_runs]]` | amendment files | traceability to raw failure data |
 | `[[logs/log]]` | system.md (once) | activity log reachable from graph root |
+| `[[knowledge/index]]` | system.md (once) | knowledge wiki reachable from graph root |
+| `[[knowledge/sources/X]]` | topic pages + project pages | source traceability |
+| `[[knowledge/topics/X]]` | source pages + project pages | concept connections |
+| `[[knowledge/proposals/X]]` | source pages | improvement proposal node |
+| `[[me]]` | knowledge/index.md (once) | personal context visible in graph |
 
 Never add duplicate wikilinks in the same file.
 
@@ -709,3 +802,7 @@ Read only when needed:
 | Duplicate `[[link]]` | Skip silently |
 | Amendment conflicts with existing patch | Show both, ask user to choose |
 | Git command fails (not a repo, no commits, git not in PATH) | Omit all git fields from Context Summary, continue normally; do not surface an error |
+| `me.md` missing during ingest | Warn: "me.md not found — ingest will proceed without personal context. Run `setup second brain` to create it." Continue. |
+| Source file format unreadable | Stop, tell user what format was detected and ask for a converted markdown version |
+| `knowledge/index.md` missing | Create it from `knowledge_index_template.md` before proceeding |
+| Proposal conflicts with existing proposal | Show both, ask user which to keep |
