@@ -1,3 +1,11 @@
+---
+type: project
+status: {{status}}
+stack: {{primary_stack}}
+last_sync: {{sync_date}}
+tags: [{{status_tag}}, {{stack_tag}}]
+---
+
 # {{ProjectName}}
 
 > {{one_sentence_purpose}}

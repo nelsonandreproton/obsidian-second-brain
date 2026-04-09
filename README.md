@@ -16,17 +16,26 @@ Claude reads and writes structured Markdown notes to your Obsidian vault. On set
 vault/
   config.yaml
   system.md                        ← master index: all projects + patterns
+  me.md                            ← personal context: goals, strengths, setup
   projects/
     MyProject/
       MyProject.md                 ← stack, services, open items (loaded as context)
       MyProject-history.md         ← session changelog
       MyProject-spec.md            ← technical spec: APIs, env vars, data models (docs only)
+      MyProject-lessons-learned.md ← accumulated bugs, gotchas, decisions
   history/
     2026-03-21.md                  ← daily cross-project changelog
     2026-03-22.md
+  weekly/
+    2026-W15.md                    ← weekly synthesis: themes, goals, stalled work
   patterns/
     stack.md                       ← shared tech conventions
     decisions.md                   ← architectural decisions + rationale
+  knowledge/
+    index.md
+    sources/                       ← summaries of ingested articles/docs
+    topics/                        ← evergreen concept pages
+    proposals/                     ← improvement proposals for review
   amendments/                      ← proposed skill self-improvements
   templates/
   logs/
@@ -48,6 +57,9 @@ Each project folder uses the project name for all its files (`MyProject.md`, `My
 | `add project X` | Adds a new project folder to the vault |
 | `log session` | Appends what you did today to history and daily changelog |
 | `inspect skill` | Analyses past failures, proposes self-improvements |
+| `ingest [file]` | Processes a source document into the knowledge wiki |
+| `weekly review` | Cross-project synthesis for the week: themes, goals, stalled work |
+| `search X` | Cross-vault search across projects, lessons, knowledge topics, and patterns |
 
 ---
 
@@ -134,6 +146,36 @@ Every `log` or `sync` also writes to `history/YYYY-MM-DD.md` — a cross-project
 ## Self-improvement (inspect)
 
 The skill logs every action to `logs/skill_runs.csv`. Running `inspect skill` analyses failures, identifies recurring patterns, and proposes amendments to its own `SKILL.md` — which you can accept, reject, or modify. Accepted amendments are versioned (`SKILL.v1.md`, `SKILL.v2.md`) so changes are traceable.
+
+---
+
+## Claude Code hooks
+
+The skill creates a `CLAUDE.md` in every project folder during `init`. This file tells Claude
+where the vault is when you open a session from that directory — no manual path configuration needed.
+
+For automatic context-load reminders, add this to `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat \"$CLAUDE_PROJECT_DIR/CLAUDE.md\" 2>/dev/null | grep -q 'obsidian_vault:' && echo 'obsidian_vault found — say: load context'"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+See `SKILL.md` → "Claude Code Hooks Integration" for a `Stop` hook that surfaces a log-session
+reminder at the end of each session.
 
 ---
 

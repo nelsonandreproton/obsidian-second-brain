@@ -423,11 +423,37 @@ prompt needed. Report both actions in a single summary response. When running as
    yes: new page in patterns/ / skip)"*
    Wait for confirmation before writing. Keep entries actionable and specific.
 9. **Periodic patterns synthesis** — count `[SESSION]` entries in `log.md`; every 5th entry,
-   scan ALL `*-lessons-learned.md` files for themes mentioned ≥ 3 times across different
-   projects (same library, same error type, same architectural pattern). Propose consolidating
-   recurring themes into `patterns/stack.md` or `patterns/decisions.md`:
-   *"Recurring theme detected across N projects: [theme]. Add to `patterns/`? (yes/skip)"*
-   Wait for confirmation.
+   run all three passes below. Present them together in one block — don't ask three times.
+
+   **Pass A — Cross-project themes:** scan ALL `*-lessons-learned.md` files for themes
+   mentioned ≥ 3 times across different projects (same library, same error type, same
+   architectural pattern). Propose consolidating recurring themes into `patterns/stack.md`
+   or `patterns/decisions.md`.
+
+   **Pass B — `me.md` evolution:** read `me.md` and compare against recent sessions.
+   Look for:
+   - New tools or technologies used that aren't listed in the **Setup** section
+   - Skills demonstrated repeatedly that could graduate from **Areas to Develop** to **Strengths**
+   - Goals that appear complete or have shifted in priority
+   - Working-style observations (e.g. consistently preferring a certain debugging approach)
+
+   **Pass C — Knowledge gap proposals:** scan `knowledge/topics/` for any topic where the
+   **Evolution** section has no entries added in the past 30 days, yet related work appeared
+   in recent sessions. Propose: *"Topic [X] may need updating — you've worked on [related
+   area] recently. Refresh it? (yes/skip)"*
+
+   Present all proposals together:
+   ```
+   Periodic synthesis (every 5th session):
+
+   Patterns: [theme] appears in ProjectA, ProjectB, ProjectC — consolidate to patterns/?
+   me.md: You've used [tool] in 3 sessions — add to Setup? / [skill] could move from
+           Areas to Develop → Strengths?
+   Knowledge: [topic] page hasn't been updated in 35 days — refresh?
+
+   Apply any? (1/2/3 / all / skip)
+   ```
+   Wait for confirmation before writing anything.
 10. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
 11. Append `[SESSION]` entry to `logs/log.md` (see **Logging** below; create file with `# Activity Log` header if not yet present)
 12. Log to CSV
@@ -601,6 +627,113 @@ human review and deliberate implementation.
 - Challenge constructively: flag gaps between the source's best practices and current work
 
 > **Privacy note:** `me.md` may contain sensitive personal context. If your vault is stored in a public git repository, add `me.md` to `.gitignore` or keep only non-sensitive content in it.
+
+---
+
+### 8. `weekly` — Weekly synthesis
+
+**When:** "weekly review", "how was my week", "weekly synthesis", "what did I work on this week",
+or "weekly recap".
+
+**Steps:**
+
+1. **Determine the week** — default to the most recent completed Monday–Sunday range.
+   If today is Monday, default to last week. Accept explicit overrides: "week of Apr 7" or "last week".
+
+2. **Collect daily files** — read every `history/YYYY-MM-DD.md` in the date range.
+   If no files exist for the range, report: "No history found for that week." and stop.
+
+3. **Read `me.md`** → current goals and areas to develop.
+
+4. **Aggregate per project:**
+   - What was done (from daily history entries)
+   - Lessons learned (from `**Lessons:**` lines in daily files)
+   - Open items still pending (not checked off in `<n>.md`)
+
+5. **Identify cross-project themes** — concepts or patterns that appeared in ≥ 2 projects
+   during the week (same library, same type of work, same class of problem).
+
+6. **Map to goals** — for each goal in `me.md`, identify which work this week moved it forward.
+   If a goal had zero activity, flag it as "no progress this week".
+
+7. **Surface stalled items** — scan all `projects/<n>/<n>.md` open items;
+   flag any not mentioned in this week's history.
+
+8. **Write `weekly/YYYY-WXX.md`** using `weekly_template.md`.
+   Create `weekly/` folder if it doesn't exist.
+   Add `[[weekly/YYYY-WXX]]` wikilink to `system.md` under a `## Weekly Reviews` section
+   (create the section if absent).
+
+9. **Log to CSV** with `project=_weekly`.
+
+**Output after writing:**
+```
+## Week YYYY-WXX ({Mon DD MMM} – {Sun DD MMM})
+
+### Work done
+| Project | Summary | Days active |
+|---------|---------|-------------|
+| [[ProjectName]] | {what was done} | {N}/7 |
+
+### Themes
+- {cross-project theme}
+
+### Goals progress
+| Goal | Progress |
+|------|----------|
+| {goal} | on track / blocked / no activity |
+
+### Stalled / needs attention
+- {open item} — [[ProjectName]]
+
+### Lessons captured this week
+- {lesson} — [[ProjectName-lessons-learned]]
+```
+
+---
+
+### 9. `search` — Cross-vault search
+
+**When:** "search for X", "what do I know about X", "find X", "do I have notes on X",
+"any lessons about X".
+
+**Steps:**
+
+1. **Extract search terms** from the query — strip filler words ("what do I know about",
+   "find", "search for") to isolate the actual query.
+
+2. **Scan these locations** (case-insensitive, whole-word preferred):
+   - `projects/<n>/<n>.md` — purpose, stack, open items
+   - `projects/<n>/<n>-lessons-learned.md` — accumulated lessons
+   - `knowledge/topics/*.md` — concept pages
+   - `knowledge/sources/*.md` — source summaries
+   - `patterns/stack.md` and `patterns/decisions.md`
+
+3. **Rank results:**
+   - Exact phrase match > all keywords match > partial match
+   - Lessons-learned and topic pages rank above context notes for conceptual queries
+
+4. **Return grouped output** (omit empty groups):
+```
+## 🔍 Search: "{query}"
+
+### Knowledge Topics
+- [[knowledge/topics/topic]] — "{excerpt 1–2 lines}"
+
+### Lessons Learned
+- [[projects/ProjectName/ProjectName-lessons-learned]] — "{lesson text}"
+
+### Projects
+- [[projects/ProjectName/ProjectName]] — "{matching line from context note}"
+
+### Patterns
+- [[patterns/stack]] — "{excerpt}"
+```
+
+5. **If no matches:** "Nothing found for '{query}'. Consider running `ingest` if you have
+   a source document on this topic."
+
+6. **Do not log** search queries to CSV (too noisy). This command is read-only — no files written.
 
 ---
 
@@ -801,6 +934,80 @@ Read only when needed:
 - `references/obsidian_syntax.md` — wikilinks, tags, Dataview
 - `references/project_fields.md` — valid field values for project notes
 - `assets/templates/` — source templates (copy, never modify originals)
+
+---
+
+## Claude Code Hooks Integration
+
+Claude Code hooks let the shell run commands automatically around tool calls and session events.
+This section shows how to wire up the second brain so context loads and logs happen without
+manual commands.
+
+### Recommended hooks
+
+Add these to `.claude/settings.json` (or `~/.claude/settings.json` for global config):
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat \"$CLAUDE_PROJECT_DIR/CLAUDE.md\" 2>/dev/null | grep -q 'obsidian_vault:' && echo 'obsidian_vault found — say: load context'"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**What this does:** When a Claude Code session starts in a project folder that has a `CLAUDE.md`
+referencing the vault, it surfaces a reminder to run `load context`. This replaces the habit of
+manually remembering to load context at session start.
+
+### Manual `load context` trigger (simpler alternative)
+
+If you prefer not to use hooks, add this to your project's `CLAUDE.md`:
+
+```markdown
+# Claude Code Context
+obsidian_vault: ~/Documents/ObsidianVault
+project: MyProject
+Run: `load context` to initialise session memory.
+```
+
+The `Run:` line is visible to Claude at session start and acts as a soft prompt.
+The `init` command creates this file automatically in every project folder.
+
+### Hook for auto-logging (advanced)
+
+To automatically propose a session log when you end a session:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Session ending — consider running: log session'"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+> **Note:** Hooks run shell commands, not Claude commands. The patterns above print reminders;
+> Claude must still execute the skill commands. Full automation (hooks calling Claude) requires
+> the Claude Code SDK — see the Claude Code documentation for agent-based approaches.
 
 ---
 
