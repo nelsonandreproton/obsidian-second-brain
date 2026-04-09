@@ -939,13 +939,37 @@ Read only when needed:
 
 ## Claude Code Hooks Integration
 
-Claude Code hooks let the shell run commands automatically around tool calls and session events.
-This section shows how to wire up the second brain so context loads and logs happen without
-manual commands.
+### How hooks interact with this skill
 
-### Recommended hooks
+Hook stdout behaviour varies by event type — this matters for what hooks can and cannot do:
 
-Add these to `.claude/settings.json` (or `~/.claude/settings.json` for global config):
+| Event | Stdout goes to | Can trigger skill commands? |
+|-------|---------------|----------------------------|
+| `SessionStart` | system context (reminder) | No — Claude sees the text but won't auto-execute |
+| `UserPromptSubmit` | injected as user context | Potentially — treated as part of user's message |
+| `Stop` | ignored | No |
+
+**The primary mechanism is the `CLAUDE.md` bridge**, not hooks. The `init` command creates a
+`CLAUDE.md` in every project folder with a `Run: load context` line. Claude reads this at session
+start and acts on it automatically — no hooks required.
+
+Hooks are a reinforcing layer, not a replacement.
+
+### CLAUDE.md bridge (created automatically by `init`)
+
+```markdown
+# Claude Code Context
+obsidian_vault: ~/Documents/ObsidianVault
+project: MyProject
+Run: `load context` to initialise session memory.
+```
+
+The `Run:` line is read by Claude at session start. It acts as a direct instruction.
+This is the simplest and most reliable way to get automatic context loading.
+
+### Optional: SessionStart hook as a secondary reminder
+
+If you want a belt-and-suspenders approach, add to `~/.claude/settings.json`:
 
 ```json
 {
@@ -956,7 +980,7 @@ Add these to `.claude/settings.json` (or `~/.claude/settings.json` for global co
         "hooks": [
           {
             "type": "command",
-            "command": "cat \"$CLAUDE_PROJECT_DIR/CLAUDE.md\" 2>/dev/null | grep -q 'obsidian_vault:' && echo 'obsidian_vault found — say: load context'"
+            "command": "[ -f \"$CLAUDE_PROJECT_DIR/CLAUDE.md\" ] && grep -q 'obsidian_vault:' \"$CLAUDE_PROJECT_DIR/CLAUDE.md\" && echo '[second-brain] Vault linked — run: load context'"
           }
         ]
       }
@@ -965,38 +989,25 @@ Add these to `.claude/settings.json` (or `~/.claude/settings.json` for global co
 }
 ```
 
-**What this does:** When a Claude Code session starts in a project folder that has a `CLAUDE.md`
-referencing the vault, it surfaces a reminder to run `load context`. This replaces the habit of
-manually remembering to load context at session start.
+This adds a system reminder to Claude's context for every session in a linked project.
+It reinforces the CLAUDE.md instruction but is not needed if CLAUDE.md already has `Run: load context`.
 
-### Manual `load context` trigger (simpler alternative)
+### Optional: UserPromptSubmit hook for missed sessions
 
-If you prefer not to use hooks, add this to your project's `CLAUDE.md`:
-
-```markdown
-# Claude Code Context
-obsidian_vault: ~/Documents/ObsidianVault
-project: MyProject
-Run: `load context` to initialise session memory.
-```
-
-The `Run:` line is visible to Claude at session start and acts as a soft prompt.
-The `init` command creates this file automatically in every project folder.
-
-### Hook for auto-logging (advanced)
-
-To automatically propose a session log when you end a session:
+A `UserPromptSubmit` hook fires before Claude processes each message and its stdout is injected
+into the conversation context. This can surface a reminder early in a session if context wasn't
+loaded:
 
 ```json
 {
   "hooks": {
-    "Stop": [
+    "UserPromptSubmit": [
       {
         "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'Session ending — consider running: log session'"
+            "command": "[ -f \"$CLAUDE_PROJECT_DIR/CLAUDE.md\" ] && grep -q 'obsidian_vault:' \"$CLAUDE_PROJECT_DIR/CLAUDE.md\" && echo '[second-brain] Vault linked. If context not yet loaded, run: load context'"
           }
         ]
       }
@@ -1005,9 +1016,27 @@ To automatically propose a session log when you end a session:
 }
 ```
 
-> **Note:** Hooks run shell commands, not Claude commands. The patterns above print reminders;
-> Claude must still execute the skill commands. Full automation (hooks calling Claude) requires
-> the Claude Code SDK — see the Claude Code documentation for agent-based approaches.
+Use this hook only if you frequently start sessions without the CLAUDE.md bridge kicking in
+(e.g. in projects where `init` hasn't been run yet). It fires on every message, so keep the
+command fast.
+
+### Setup steps
+
+The hook configs live in `~/.claude/settings.json` (applies to all projects globally) or in
+`.claude/settings.json` inside a specific project (committed to the repo). A ready-to-use
+example is provided in `assets/settings.json.example` — copy and edit as needed:
+
+```bash
+# Global config (all projects)
+cp assets/settings.json.example ~/.claude/settings.json
+
+# Or project-level (one project only)
+cp assets/settings.json.example .claude/settings.json
+```
+
+> **Note:** Hooks run shell commands. `$CLAUDE_PROJECT_DIR` is a real Claude Code variable —
+> always quote it in case the path contains spaces. Scripts referenced from hooks must be
+> executable (`chmod +x`).
 
 ---
 

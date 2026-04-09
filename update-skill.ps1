@@ -1,14 +1,29 @@
 # update-skill.ps1
-# Copies SKILL.md to the Claude desktop skills folder after git pull.
+# Syncs the skill to the Claude Code skills folder after git pull.
 # Usage: .\update-skill.ps1
 
-$source = Join-Path $PSScriptRoot "SKILL.md"
-$dest   = Join-Path $env:USERPROFILE ".claude\skills\obsidian-second-brain\SKILL.md"
-$destDir = Split-Path $dest
+$dest = Join-Path $env:USERPROFILE ".claude\skills\obsidian-second-brain"
 
-if (-not (Test-Path $destDir)) {
-    New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-}
+# Create destination folders
+New-Item -ItemType Directory -Path (Join-Path $dest "assets\templates") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $dest "references")        -Force | Out-Null
 
-Copy-Item $source $dest -Force
+# Copy skill definition
+Copy-Item (Join-Path $PSScriptRoot "SKILL.md") $dest -Force
+
+# Copy templates
+Copy-Item (Join-Path $PSScriptRoot "assets\templates\*.md") (Join-Path $dest "assets\templates") -Force
+
+# Copy settings example
+Copy-Item (Join-Path $PSScriptRoot "assets\settings.json.example") (Join-Path $dest "assets") -Force
+
+# Copy references
+Copy-Item (Join-Path $PSScriptRoot "references\*.md") (Join-Path $dest "references") -Force
+
 Write-Host "Skill updated: $dest"
+Write-Host ""
+Write-Host "Hooks (optional):"
+Write-Host "  Global:  Copy-Item '$dest\assets\settings.json.example' '$env:USERPROFILE\.claude\settings.json'"
+Write-Host "  Project: Copy-Item '$dest\assets\settings.json.example' '.claude\settings.json'"
+Write-Host ""
+Write-Host "New session required for changes to take effect."
