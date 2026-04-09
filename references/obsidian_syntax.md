@@ -38,31 +38,55 @@ Tags in Obsidian are searchable across the vault. Place them near the top of not
 
 Use callouts sparingly — only for genuinely important notices in project.md.
 
-## Dataview Queries (optional, if Dataview plugin installed)
-
-```dataview
-TABLE status, last_synced FROM "projects"
-WHERE status = "Active"
-SORT last_synced DESC
-```
-
-Don't generate Dataview blocks unless user confirms the plugin is installed.
-
 ## Frontmatter (YAML)
 
-Obsidian supports YAML frontmatter for structured metadata:
+Project notes include YAML frontmatter by default. This powers Dataview queries and Obsidian
+search filters without requiring any extra plugins.
 
 ```yaml
 ---
-project: GarminBot
+type: project
 status: active
-last_synced: 2025-03-21
-tags: [active, docker, telegram]
+stack: Python
+last_sync: 2026-04-09
+tags: [active, python, docker]
 ---
 ```
 
-The skill does **not** use frontmatter by default (keeps files human-readable).
-Only add frontmatter if the user requests Dataview integration.
+Valid `status` values: `active`, `archived`, `blocked`, `wip`, `stable`
+Valid `type` values: `project`, `knowledge-topic`, `knowledge-source`, `personal-context`, `weekly-review`
+
+## Dataview Queries (requires Dataview plugin)
+
+These queries work out of the box once frontmatter is populated by the skill.
+
+**All active projects, sorted by last sync:**
+```dataview
+TABLE stack, last_sync FROM "projects"
+WHERE type = "project" AND status = "active"
+SORT last_sync DESC
+```
+
+**Stale projects (not synced in 14+ days):**
+```dataview
+TABLE last_sync, stack FROM "projects"
+WHERE type = "project" AND date(last_sync) < date(today) - dur(14 days)
+SORT last_sync ASC
+```
+
+**All knowledge topics:**
+```dataview
+LIST FROM "knowledge/topics"
+WHERE type = "knowledge-topic"
+SORT file.name ASC
+```
+
+**Weekly reviews:**
+```dataview
+TABLE date_range FROM "weekly"
+WHERE type = "weekly-review"
+SORT week DESC
+```
 
 ## Checkboxes
 
