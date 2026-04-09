@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f \"$CLAUDE_PROJECT_DIR/CLAUDE.md\" ] && grep -q 'obsidian_vault:' \"$CLAUDE_PROJECT_DIR/CLAUDE.md\" && echo '[second-brain] Vault linked — run: load context'"
+          }
+        ]
+      }
+    ]
+  }
+}
