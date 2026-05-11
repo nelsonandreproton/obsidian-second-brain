@@ -732,16 +732,28 @@ or "weekly recap".
 1. **Extract search terms** from the query — strip filler words ("what do I know about",
    "find", "search for") to isolate the actual query.
 
-2. **Scan these locations** (case-insensitive, whole-word preferred):
-   - `projects/<n>/<n>.md` — purpose, stack, open items
-   - `projects/<n>/<n>-lessons-learned.md` — accumulated lessons
-   - `knowledge/topics/*.md` — concept pages
-   - `knowledge/sources/*.md` — source summaries
-   - `patterns/stack.md` and `patterns/decisions.md`
+2. **Search the vault — prefer MCP, fall back to file reads:**
+
+   **If the `obsidian` MCP server is available** (check by attempting a tool call):
+   - Call `search_notes` with the extracted query — returns BM25-ranked results across
+     the full vault in one round-trip
+   - Follow up with `read_note` only for results that need excerpt extraction
+   - This path is faster, uses fewer tokens, and covers the full vault including files
+     not pre-loaded into context
+
+   **If MCP is unavailable** (fall back to file reads):
+   - Scan these locations manually (case-insensitive, whole-word preferred):
+     - `projects/<n>/<n>.md` — purpose, stack, open items
+     - `projects/<n>/<n>-lessons-learned.md` — accumulated lessons
+     - `knowledge/topics/*.md` — concept pages
+     - `knowledge/sources/*.md` — source summaries
+     - `patterns/stack.md` and `patterns/decisions.md`
 
 3. **Rank results:**
    - Exact phrase match > all keywords match > partial match
    - Lessons-learned and topic pages rank above context notes for conceptual queries
+   - When using MCP, trust the BM25 relevance score for ordering; apply the type
+     hierarchy only to break ties between equal-score results
 
 4. **Return grouped output** (omit empty groups):
 ```
