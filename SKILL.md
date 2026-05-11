@@ -381,9 +381,15 @@ This is the **most used command** — keep it fast and lean.
 **Last session:** {date} — {one line summary}
 **Patterns active:** {relevant patterns}
 **Open items:** {TODOs from <n>.md}
+**Pending proposals:** {N} (oldest: #{N}, {ISO date}) — run `search proposals` to review  [omit line if N=0]
+**Raw backlog:** {N} files pending ingestion (ingested: false in raw/)  [omit line if N=0]
 
 Ready. What are we working on?
 ```
+
+**How to compute pending proposals:** count `.md` files in `knowledge/proposals/` whose frontmatter has `status: proposal` (not `status: implemented`).
+
+**How to compute raw backlog:** count `.md` files in `raw/` whose frontmatter has `ingested: false` (or no `ingested` field at all, treating absence as false). Exclude files with `duplicate_of:` set.
 
 If pending failures were found in step 1, append:
 ```
@@ -536,7 +542,11 @@ or automatically suggested when `log.md` entry count reaches a multiple of `lint
    disk but have no `CLAUDE.md` file.
 5. **Spec contradictions** — for each project, compare the `stack:` field in `<n>.md`
    against the tech stack mentioned in `<n>-spec.md`. Flag mismatches.
-6. **Output lint report:**
+6. **Duplicate raw sources** — scan all `.md` files in `raw/` for `source:` frontmatter
+   fields. Group by URL. If two or more files share the same `source:` URL, flag them as
+   duplicates. Also flag files where `duplicate_of:` is set (these are confirmed duplicates
+   awaiting deletion). List both groups separately.
+7. **Output lint report:**
    ```
    ## 🔍 Vault Lint Report — {ISO date}
 
@@ -545,16 +555,19 @@ or automatically suggested when `log.md` entry count reaches a multiple of `lint
    **Stale notes:** {N} — {list with days overdue}
    **Missing CLAUDE.md:** {N} — {list}
    **Spec contradictions:** {N} — {list}
+   **Duplicate sources:** {N} — {list of URL → [file1, file2]}
+   **Confirmed duplicates (pending delete):** {N} — {list}
    ```
-7. Ask: "Auto-fix what's possible? (yes/skip)"
+8. Ask: "Auto-fix what's possible? (yes/skip)"
 
 **Auto-fixable (with confirmation):** Missing CLAUDE.md bridges (create them using init
 bridge format). Orphan pages that have a matching project — add the missing wikilink.
 
 **Manual only:** Broken links (target file may need creating or link needs correcting),
-spec contradictions (requires human judgement on which version is correct).
+spec contradictions (requires human judgement on which version is correct), duplicate
+source deletion (user must confirm which file to keep before the other is deleted).
 
-8. Append `[LINT]` entry to `logs/log.md` (see **Logging** below). Log to CSV.
+9. Append `[LINT]` entry to `logs/log.md` (see **Logging** below). Log to CSV.
 
 ---
 
@@ -573,8 +586,24 @@ human review and deliberate implementation.
 1. **Identify and convert source**
    - Accept: path to file in `raw/`, pasted markdown, or file reference (preferred)
    - URLs are accepted but require explicit confirmation before fetching: "Fetch `{url}`? This will make a network request. (yes/no)"
-   - If PDF → extract text to markdown; if URL → fetch and convert only after confirmation; if image → describe
-   - Confirm format with user before proceeding
+   - **X/Twitter URLs** (`x.com/*/status/*` or `twitter.com/*/status/*`) — special handling, no confirmation needed:
+     1. Rewrite URL to `https://api.fxtwitter.com/{user}/status/{id}` and fetch the JSON
+     2. Extract: `tweet.text`, `tweet.author.name`, `tweet.author.screen_name`, `tweet.created_at`, `tweet.media` (if any)
+     3. **Thread detection**: if `tweet.thread` exists in the fxtwitter response, fetch each tweet in the thread in order and concatenate the full text
+     4. **Quoted tweet**: if `tweet.quote` exists, include quoted author + text as a blockquote
+     5. Compose a clean markdown representation: author, date, full text, quoted tweet (if any), thread continuation (if any)
+     6. Also check if a corresponding file already exists in `raw/` (look for files containing the status ID or a matching title) — if found, read it but treat the fxtwitter content as authoritative for the body text
+   - **Non-Markdown files (PDF, DOCX, PPTX, XLSX, etc.):** convert using `markitdown` before proceeding:
+     1. Confirm: "This is a `{ext}` file. Convert to Markdown using `markitdown`? (yes/no)"
+     2. If yes: run `markitdown {path}` via Bash (or `python -c "from markitdown import MarkItDown; print(MarkItDown().convert('{path}').text_content)"`)
+     3. If `markitdown` is not installed: tell the user "Install with: `pip install 'markitdown[pdf,docx,pptx]'`" and stop
+     4. Use the converted Markdown output as the source for all remaining steps
+     5. Note in the source summary page: "Converted from `{original filename}` ({ext}) using markitdown"
+     6. Keep the original file in `raw/` unmodified
+   - If format is plain Markdown (`.md`, `.txt`, pasted text): proceed directly, no conversion needed
+   - If image: describe visually (no markitdown needed)
+   - If URL (non-X): fetch and convert only after confirmation
+   - Confirm format detection with user before proceeding
 
 2. **Load context**
    - Read `me.md` → personal goals, strengths, projects, style
@@ -610,7 +639,8 @@ human review and deliberate implementation.
 6. **Challenge existing approach**
    Compare insights against `patterns/`, `SKILL.md`, and project approaches.
    For each genuine improvement identified:
-   - Create `knowledge/proposals/{slug}.md` from `knowledge_proposal_template.md`
+   - Determine the next proposal number: count existing files in `knowledge/proposals/` and add 1
+   - Create `knowledge/proposals/{N}-{slug}.md` from `knowledge_proposal_template.md` (e.g. `6-improve-search.md`)
    - Include: current approach, suggested change, rationale, how to implement if accepted
    - Do NOT modify anything — proposals are read-only suggestions
 
