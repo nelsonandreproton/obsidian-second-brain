@@ -322,7 +322,11 @@ This file is how the skill finds the vault when invoked from a project directory
 11. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
 12. Append `[INGEST]` entry to `logs/log.md` (see **Logging** below; create file with `# Activity Log` header if not yet present)
 13. Log to CSV
-14. **Lint nudge** — count `[INGEST]` + `[SESSION]` entries in `log.md`; if the count is a
+14. **Update project overview** — create or update `overview.html` in the project's source
+    directory (see **overview.html** below). Then check `C:\dev\index.html`: if the project
+    card is absent or its one-line description is materially wrong, update it (see
+    **index.html** below).
+15. **Lint nudge** — count `[INGEST]` + `[SESSION]` entries in `log.md`; if the count is a
     multiple of `lint_auto_interval`, append at end of response: *"Vault health check due —
     run `lint vault`?"*
 
@@ -463,7 +467,11 @@ prompt needed. Report both actions in a single summary response. When running as
 10. Update `history/{ISO date}.md` — append project section (see **Daily History** below)
 11. Append `[SESSION]` entry to `logs/log.md` (see **Logging** below; create file with `# Activity Log` header if not yet present)
 12. Log to CSV
-13. **Lint nudge** — same check as in `sync` step 14.
+13. **Update project overview** — create or update `overview.html` in the project's source
+    directory (see **overview.html** below). Then check `C:\dev\index.html`: if the project
+    card is absent or its one-line description is materially wrong, update it (see
+    **index.html** below).
+14. **Lint nudge** — same check as in `sync` step 15.
 
 ---
 
@@ -776,6 +784,75 @@ or "weekly recap".
    a source document on this topic."
 
 6. **Do not log** search queries to CSV (too noisy). This command is read-only — no files written.
+
+---
+
+## overview.html
+
+Every project with a source directory on disk should have an `overview.html` at its root.
+Create or overwrite it during `sync` (step 14) and `log` (step 13).
+
+**When to create/update:**
+- On every `sync` or `log` call for a project
+- Do NOT create for projects whose source directory can't be determined
+
+**Content rules:**
+- Use the same dark-theme CSS design token system found in other `C:\dev\*\overview.html`
+  files (CSS vars: `--bg:#0f1117`, `--surface:#1a1d27`, `--accent:#6c8aff`, etc.)
+- Do not copy the CSS verbatim from this skill — generate it inline, matching the style
+- Header: project name with an accent `<span>` split, one-line purpose, badge pills for
+  the main tech stack entries
+- Include these sections (add/omit based on what's known from the project scan):
+  1. **What this project does** — purpose card + core stack param-grid (2-column grid)
+  2. **Main workflow** — flow-box pipeline if the project has a clear data flow
+  3. **Key files or commands** — file-table or param-grid listing important files/scripts
+  4. **Configuration** — .env variables param-grid (omit secrets/values, list names only)
+  5. **Docker / deployment** — if the project runs in Docker (base image, health check,
+     volumes, restart policy, deployed where)
+- Footer: `<project-name> · <one-liner> · <a href="../index.html">← All Projects</a>`
+- Do NOT include any personal data, passwords, token values, or `.env` contents
+- If the project has no meaningful diff from the last sync, still regenerate the file
+  (the content comes from vault notes, not a diff — always reflect current known state)
+
+**How to determine the source directory:**
+Use the path from `project_sources` in `config.yaml` where the project folder was found.
+Example: if `project_sources` contains `C:/DEV` and the project is `GarminBot`, write to
+`C:/DEV/GarminBot/overview.html`.
+
+---
+
+## index.html
+
+`C:\dev\index.html` is the master index of all projects. Update it when:
+- A project card for this project is **absent** from the file
+- The project card's one-line description is **materially wrong** (stack changed, purpose
+  changed) — do NOT update for minor wording differences
+
+**How to update:**
+1. Read the full file before editing (it is large)
+2. Find the correct alphabetical letter group (`<div class="letter-group">` with matching
+   `<div class="section-label">` letter)
+3. Add or update a `<div class="project-card">` inside the letter group's
+   `<div class="project-grid">`:
+   ```html
+   <div class="project-card">
+     <a href="ProjectName/overview.html">
+       <div class="name">ProjectName</div>
+       <div class="desc">One-line description under ~90 characters</div>
+       <span class="badge-tag tag-py">Python</span>
+     </a>
+   </div>
+   ```
+4. Tag classes: `tag-py` Python · `tag-cs` C#/.NET · `tag-ts` TypeScript/JS · `tag-bot` Bot
+   · `tag-ml` AI/ML · `tag-mcp` MCP · `tag-misc` Other
+5. If adding a new card, update the project count in: the `<p>` subtitle, both
+   `<div class="stat">` counters, and the `<footer>` text
+6. Do NOT update `index.html` for every session — only when the card is missing or wrong
+
+**Do NOT update index.html when:**
+- The card already exists with a correct description
+- You are running `context` (read-only command)
+- The project source directory is not under `C:\dev\`
 
 ---
 
